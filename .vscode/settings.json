@@ -1,0 +1,11 @@
+{
+    "files.associations": {
+        "jemalloc.h": "c",
+        "alloc.h": "c",
+        "enhanced_alloc.h": "c",
+        "cf_clock.h": "c",
+        "cf_atomic.h": "c",
+        "malloc.h": "c",
+        "syscall.h": "c"
+    }
+}

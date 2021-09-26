@@ -1,0 +1,356 @@
+diff --git a/cf/src/alloc.c b/cf/src/alloc.c
+index a3514816c..a87bf3668 100644
+--- a/cf/src/alloc.c
++++ b/cf/src/alloc.c
+@@ -38,7 +38,9 @@
+ #include <time.h>
+ #include <unistd.h>
+ 
++#ifndef __SANITIZE_ADDRESS__
+ #include <jemalloc/jemalloc.h>
++#endif
+ 
+ #include <sys/syscall.h>
+ #include <sys/types.h>
+@@ -92,23 +94,44 @@ extern size_t je_chunksize_mask;
+ extern void *je_huge_aalloc(const void *p);
+ 
+ __thread int32_t g_ns_arena = -1;
++
++#ifndef __SANITIZE_ADDRESS__
++
+ static __thread int32_t g_ns_tcache = -1;
+ 
++#endif
++
+ static const void *g_site_ras[MAX_SITES];
++
++#ifndef __SANITIZE_ADDRESS__
++
+ static uint32_t g_n_site_ras;
+ 
++#endif
++
+ static site_info g_site_infos[MAX_SITES * MAX_THREADS];
+ // Start at 1, then we can use site ID 0 to mean "no site ID".
+ static uint64_t g_n_site_infos = 1;
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ static __thread uint32_t g_thread_site_infos[MAX_SITES];
+ 
++#endif
++
+ bool g_alloc_started = false;
++
++#ifndef __SANITIZE_ADDRESS__
++
+ static int32_t g_startup_arena = -1;
+ 
++#endif
++
+ static cf_alloc_debug g_debug;
+ static bool g_indent;
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ static __thread as_random g_rand = { .initialized = false };
+ 
+ // All the hook_*() functions are invoked from hook functions that hook into
+@@ -487,9 +510,12 @@ valgrind_check(void)
+ 	}
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ void
+ cf_alloc_init(void)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	valgrind_check();
+ 
+ 	// Turn off libstdc++'s memory caching, as it just duplicates JEMalloc's.
+@@ -517,6 +543,7 @@ cf_alloc_init(void)
+ 
+ 		free(p);
+ 	}
++#endif
+ }
+ 
+ void
+@@ -531,6 +558,7 @@ cf_alloc_set_debug(cf_alloc_debug debug_allocations, bool indent_allocations)
+ int32_t
+ cf_alloc_create_arena(void)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	int32_t arena;
+ 	size_t arena_len = sizeof(arena);
+ 
+@@ -542,12 +570,16 @@ cf_alloc_create_arena(void)
+ 
+ 	cf_debug(CF_ALLOC, "created new arena %d", arena);
+ 	return arena;
++#else
++	return 0;
++#endif
+ }
+ 
+ void
+ cf_alloc_heap_stats(size_t *allocated_kbytes, size_t *active_kbytes, size_t *mapped_kbytes,
+ 		double *efficiency_pct, uint32_t *site_count)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	uint64_t epoch = 1;
+ 	size_t len = sizeof(epoch);
+ 
+@@ -604,8 +636,27 @@ cf_alloc_heap_stats(size_t *allocated_kbytes, size_t *active_kbytes, size_t *map
+ 	if (site_count) {
+ 		*site_count = ck_pr_load_32(&g_n_site_ras);
+ 	}
++#else
++	if (allocated_kbytes) {
++		*allocated_kbytes = 0;
++	}
++	if (active_kbytes) {
++		*active_kbytes = 0;
++	}
++	if (mapped_kbytes) {
++		*mapped_kbytes = 0;
++	}
++	if (efficiency_pct) {
++		*efficiency_pct = 0.0;
++	}
++	if (site_count){
++		*site_count = 0;
++	}
++#endif
+ }
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ static void
+ line_to_log(void *data, const char *line)
+ {
+@@ -628,6 +679,8 @@ line_to_file(void *data, const char *line)
+ 	fprintf((FILE *)data, "%s", line);
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ static void
+ time_to_file(FILE *fh)
+ {
+@@ -655,6 +708,7 @@ time_to_file(FILE *fh)
+ void
+ cf_alloc_log_stats(const char *file, const char *opts)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	if (file == NULL) {
+ 		jem_malloc_stats_print(line_to_log, NULL, opts);
+ 		return;
+@@ -671,6 +725,10 @@ cf_alloc_log_stats(const char *file, const char *opts)
+ 	time_to_file(fh);
+ 	jem_malloc_stats_print(line_to_file, fh, opts);
+ 	fclose(fh);
++#else
++	(void)file;
++	(void)opts;
++#endif
+ }
+ 
+ void
+@@ -703,6 +761,8 @@ cf_alloc_log_site_infos(const char *file)
+ 	fclose(fh);
+ }
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ static bool
+ is_transient(int32_t arena)
+ {
+@@ -891,16 +951,23 @@ do_mallocx(size_t sz, int32_t arena, const void *ra)
+ 	return p_indent;
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ void *
+ cf_alloc_try_malloc(size_t sz)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	// Allowed to return NULL.
+ 	return do_mallocx(sz, -1, __builtin_return_address(0));
++#else
++	return malloc(sz);
++#endif
+ }
+ 
+ void *
+ cf_alloc_malloc_arena(size_t sz, int32_t arena)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	cf_assert(g_alloc_started, CF_ALLOC, "arena allocation during startup");
+ 
+ 	void *p_indent = do_mallocx(sz, arena, __builtin_return_address(0));
+@@ -909,8 +976,14 @@ cf_alloc_malloc_arena(size_t sz, int32_t arena)
+ 			sz, arena);
+ 
+ 	return p_indent;
++#else
++	(void)arena;
++	return malloc(sz);
++#endif
+ }
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ void *
+ __attribute__ ((noinline))
+ malloc(size_t sz)
+@@ -946,9 +1019,12 @@ do_callocx(size_t n, size_t sz, int32_t arena, const void *ra)
+ 	return p_indent;
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ void *
+ cf_alloc_calloc_arena(size_t n, size_t sz, int32_t arena)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	cf_assert(g_alloc_started, CF_ALLOC, "arena allocation during startup");
+ 
+ 	void *p_indent = do_callocx(n, sz, arena, __builtin_return_address(0));
+@@ -957,8 +1033,14 @@ cf_alloc_calloc_arena(size_t n, size_t sz, int32_t arena)
+ 			"calloc_ns failed n %zu sz %zu arena %d", n, sz, arena);
+ 
+ 	return p_indent;
++#else
++	(void)arena;
++	return calloc(n, sz);
++#endif
+ }
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ void *
+ calloc(size_t n, size_t sz)
+ {
+@@ -1040,9 +1122,12 @@ do_rallocx(void *p_indent, size_t sz, int32_t arena, const void *ra)
+ 	return p2_indent;
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ void *
+ cf_alloc_realloc_arena(void *p_indent, size_t sz, int32_t arena)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	cf_assert(g_alloc_started, CF_ALLOC, "arena allocation during startup");
+ 
+ 	void *p2_indent = do_rallocx(p_indent, sz, arena,
+@@ -1052,8 +1137,14 @@ cf_alloc_realloc_arena(void *p_indent, size_t sz, int32_t arena)
+ 			"realloc_ns failed sz %zu arena %d", sz, arena);
+ 
+ 	return p2_indent;
++#else
++	(void)arena;
++	return realloc(p_indent, sz);
++#endif
+ }
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ void *
+ realloc(void *p_indent, size_t sz)
+ {
+@@ -1116,6 +1207,8 @@ strndup(const char *s, size_t n)
+ 	return do_strdup(s, n2, __builtin_return_address(0));
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ static int32_t
+ do_asprintf(char **res, const char *form, va_list va, const void *ra)
+ {
+@@ -1126,7 +1219,12 @@ do_asprintf(char **res, const char *form, va_list va, const void *ra)
+ 		cf_crash(CF_ALLOC, "asprintf overflow len %d", n);
+ 	}
+ 
++#ifndef __SANITIZE_ADDRESS__
+ 	*res = do_strdup(buff, (size_t)n, ra);
++#else
++	(void)ra;
++	*res = strdup(buff);
++#endif
+ 	return n;
+ }
+ 
+@@ -1156,6 +1254,8 @@ __asprintf_chk(char **res, int32_t flags, const char *form, ...)
+ 	return n;
+ }
+ 
++#ifndef __SANITIZE_ADDRESS__
++
+ int32_t
+ posix_memalign(void **p, size_t align, size_t sz)
+ {
+@@ -1259,14 +1359,19 @@ pvalloc(size_t sz)
+ 	return NULL;
+ }
+ 
++#endif  // ! __SANITIZE_ADDRESS__
++
+ void *
+ cf_rc_alloc(size_t sz)
+ {
++#ifndef __SANITIZE_ADDRESS__
+ 	int32_t flags = calc_alloc_flags(0, -1);
++#endif
+ 
+ 	size_t tot_sz = sizeof(cf_rc_header) + sz;
+ 	size_t ext_sz = tot_sz;
+ 
++#ifndef __SANITIZE_ADDRESS__
+ 	if (want_debug(-1)) {
+ 		ext_sz += sizeof(uint32_t);
+ 
+@@ -1276,8 +1381,12 @@ cf_rc_alloc(size_t sz)
+ 	}
+ 
+ 	void *p = jem_mallocx(ext_sz, flags);
++#else
++	void *p = malloc(ext_sz);
++#endif
+ 	void *p_indent = p;
+ 
++#ifndef __SANITIZE_ADDRESS__
+ 	if (want_debug(-1)) {
+ 		if (g_indent) {
+ 			p_indent = indent(p);
+@@ -1285,6 +1394,7 @@ cf_rc_alloc(size_t sz)
+ 
+ 		hook_handle_alloc(__builtin_return_address(0), p, p_indent, tot_sz);
+ 	}
++#endif
+ 
+ 	cf_rc_header *head = p_indent;
+ 
+@@ -1303,6 +1413,7 @@ do_rc_free(void *body, void *ra)
+ 
+ 	cf_rc_header *head = (cf_rc_header *)body - 1;
+ 
++#ifndef __SANITIZE_ADDRESS__
+ 	int32_t arena = hook_get_arena(head);
+ 	int32_t flags = calc_free_flags(arena);
+ 
+@@ -1316,6 +1427,10 @@ do_rc_free(void *body, void *ra)
+ 
+ 	hook_handle_free(ra, p, jem_sz);
+ 	jem_sdallocx(p, jem_sz, flags);
++#else
++	(void)ra;
++	free(head);
++#endif
+ }
+ 
+ void

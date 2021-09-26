@@ -254,7 +254,7 @@ endif
 AS_LIBRARIES += $(LIBRARY_DIR)/libcf.a
 AS_LIBRARIES += $(LIBRARY_DIR)/libai.a
 AS_LIBRARIES += $(COMMON)/target/$(PLATFORM)/lib/libaerospike-common.a
-AS_LIBRARIES += $(JEMALLOC)/lib/libjemalloc.a
+# AS_LIBRARIES += $(JEMALLOC)/lib/libjemalloc.a
 AS_LIBRARIES += $(MOD_LUA)/target/$(PLATFORM)/lib/libmod_lua.a
 
 ifeq ($(DOPROFILE),1)
@@ -312,7 +312,7 @@ clean:
 # Emacs syntax check target.CHK_SOURCES is set by emacs to the files being edited.
 .PHONY: check-syntax
 check-syntax:
-	$(CC) -Wall -Wextra -pedantic -fsyntax-only $(CHK_SOURCES)
+	$(CC) -Wextra -pedantic -fsyntax-only $(CHK_SOURCES)
 
 .PHONY: lib
 lib: $(OBJECTS) $(AS_LIBRARIES)

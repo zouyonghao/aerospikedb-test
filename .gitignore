@@ -18,3 +18,5 @@ cert.pem
 chain.pem
 cacert.pem
 cbl.txt
+*.ll
+*.d
