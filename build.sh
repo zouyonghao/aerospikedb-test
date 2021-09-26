@@ -1,3 +1,5 @@
+sudo apt install liblua5.1-dev
+
 make clean
 
 # make USE_LUAJIT=0 \
