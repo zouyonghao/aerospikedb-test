@@ -1,9 +1,7 @@
-sudo apt install liblua5.1-dev
-
 make clean
 
 make USE_LUAJIT=0 \
-    CC="clang-9 -fsanitize=address"
+    CC="clang-9 -fsanitize=address" -j$(nproc)
 
 # make
 
